@@ -660,7 +660,7 @@ finish:
     pa_dbus_pending_free(p);
 }
 
-static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t gain) {
+static void bluez5_transport_set_volume(pa_bluetooth_transport *t, uint16_t gain) {
     static const char *volume_str = "Volume";
     static const char *mediatransport_str = BLUEZ_MEDIA_TRANSPORT_INTERFACE;
     struct set_volume_and_transport *call_data;
@@ -669,7 +669,7 @@ static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t
 
     pa_assert(t);
     pa_assert(t->device);
-    pa_assert(pa_bluetooth_profile_is_a2dp_sink(t->profile));
+    pa_assert(pa_bluetooth_profile_is_a2dp(t->profile));
     pa_assert(t->device->discovery);
 
     // TODO: Pali already converted this
@@ -677,7 +677,9 @@ static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t
     // /* Propagate rounding and bound checks */
     // volume = a2dp_gain_to_volume(gain);
 
-    if (t->tx_volume_gain == gain)
+    if (pa_bluetooth_profile_is_a2dp_source(t->profile) && t->rx_volume_gain == gain)
+        return;
+    else if (pa_bluetooth_profile_is_a2dp_sink(t->profile) && t->tx_volume_gain == gain)
         return;
 
     pa_assert_se(m = dbus_message_new_method_call(BLUEZ_SERVICE, t->path, DBUS_INTERFACE_PROPERTIES, "Set"));
@@ -692,6 +694,18 @@ static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t
     call_data->gain = gain;
 
     send_and_add_to_pending(t->device->discovery, m, set_volume_reply, call_data);
+}
+
+static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t gain) {
+    pa_assert(t);
+    pa_assert(pa_bluetooth_profile_is_a2dp_sink(t->profile));
+    bluez5_transport_set_volume(t, gain);
+}
+
+static void bluez5_transport_set_source_volume(pa_bluetooth_transport *t, uint16_t gain) {
+    pa_assert(t);
+    pa_assert(pa_bluetooth_profile_is_a2dp_source(t->profile));
+    bluez5_transport_set_volume(t, gain);
 }
 
 bool pa_bluetooth_device_any_transport_connected(const pa_bluetooth_device *d) {
@@ -2402,6 +2416,7 @@ static DBusMessage *endpoint_set_configuration(DBusConnection *conn, DBusMessage
     t->max_tx_volume_gain = A2DP_MAX_GAIN;
     t->acquire = bluez5_transport_acquire_cb;
     t->release = bluez5_transport_release_cb;
+    t->set_rx_volume_gain = bluez5_transport_set_source_volume;
     t->set_tx_volume_gain = bluez5_transport_set_sink_volume;
     pa_bluetooth_transport_put(t);
 
