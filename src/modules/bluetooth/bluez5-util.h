@@ -39,6 +39,8 @@
 #define PA_BLUETOOTH_UUID_HFP_HF      "0000111e-0000-1000-8000-00805f9b34fb"
 #define PA_BLUETOOTH_UUID_HFP_AG      "0000111f-0000-1000-8000-00805f9b34fb"
 
+#define A2DP_MAX_GAIN 127
+
 typedef struct pa_bluetooth_transport pa_bluetooth_transport;
 typedef struct pa_bluetooth_device pa_bluetooth_device;
 typedef struct pa_bluetooth_adapter pa_bluetooth_adapter;
@@ -174,15 +176,12 @@ pa_bluetooth_device* pa_bluetooth_discovery_get_device_by_address(pa_bluetooth_d
 pa_hook* pa_bluetooth_discovery_hook(pa_bluetooth_discovery *y, pa_bluetooth_hook_t hook);
 
 unsigned pa_bluetooth_profile_count(void);
+bool pa_bluetooth_profile_is_a2dp(pa_bluetooth_profile_t profile);
 bool pa_bluetooth_profile_is_a2dp_sink(pa_bluetooth_profile_t profile);
 bool pa_bluetooth_profile_is_a2dp_source(pa_bluetooth_profile_t profile);
 const pa_a2dp_codec *pa_bluetooth_profile_to_a2dp_codec(pa_bluetooth_profile_t profile);
 pa_bluetooth_profile_t pa_bluetooth_profile_for_a2dp_codec(const char *codec_name, bool is_a2dp_sink);
 const char *pa_bluetooth_profile_to_string(pa_bluetooth_profile_t profile);
-
-static inline bool pa_bluetooth_profile_is_a2dp(pa_bluetooth_profile_t profile) {
-    return pa_bluetooth_profile_is_a2dp_sink(profile) || pa_bluetooth_profile_is_a2dp_source(profile);
-}
 
 static inline bool pa_bluetooth_profile_support_a2dp_backchannel(pa_bluetooth_profile_t profile) {
     return pa_bluetooth_profile_to_a2dp_codec(profile)->support_backchannel;

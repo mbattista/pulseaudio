@@ -83,8 +83,6 @@
     " <node name=\"Source\"/>\n"                                               \
     "</node>\n"
 
-#define A2DP_MAX_VOLUME 127
-
 #define ENDPOINT_INTROSPECT_XML                                         \
     DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE                           \
     "<node>\n"                                                          \
@@ -109,6 +107,27 @@
     "  </method>\n"                                                     \
     " </interface>\n"                                                   \
     "</node>\n"
+
+// TODO: Delete or move
+// static pa_volume_t a2dp_gain_to_volume(uint16_t gain) {
+//     /* Round to closest by adding half the denominator */
+//     pa_volume_t volume = (pa_volume_t)((gain * PA_VOLUME_NORM + A2DP_MAX_GAIN / 2) / A2DP_MAX_GAIN);
+
+//     if (volume > PA_VOLUME_NORM)
+//         volume = PA_VOLUME_NORM;
+
+//     return volume;
+// }
+
+// static uint16_t volume_to_a2dp_gain(pa_volume_t volume) {
+//     /* Round to closest by adding half the denominator */
+//     uint64_t gain = (volume * A2DP_MAX_GAIN + PA_VOLUME_NORM / 2) / PA_VOLUME_NORM;
+
+//     if (gain > A2DP_MAX_GAIN)
+//         gain = A2DP_MAX_GAIN;
+
+//     return gain;
+// }
 
 struct pa_bluetooth_discovery {
     PA_REFCNT_DECLARE;
@@ -416,19 +435,22 @@ pa_hashmap *pa_bluetooth_transport_get_all(pa_bluetooth_discovery *y) {
     return y->transports;
 }
 
-static void pa_bluetooth_transport_set_source_volume(pa_bluetooth_transport *t, uint16_t gain) {
-    pa_volume_t volume;
+static void pa_bluetooth_transport_remote_volume_changed(pa_bluetooth_transport *t, pa_volume_t volume) {
+    pa_bluetooth_hook_t hook;
 
     pa_assert(t);
 
-    volume = (pa_volume_t) (gain * PA_VOLUME_NORM / A2DP_MAX_VOLUME);
+    if (pa_bluetooth_profile_is_a2dp_source(t->profile)) {
+        t->rx_volume_gain = volume;
+        hook = /* PA_BLUETOOTH_HOOK_TRANSPORT_SOURCE_VOLUME_CHANGED */PA_BLUETOOTH_HOOK_TRANSPORT_RX_VOLUME_GAIN_CHANGED;
+    } else if (pa_bluetooth_profile_is_a2dp_sink(t->profile)) {
+        t->tx_volume_gain = volume;
+        hook = /* PA_BLUETOOTH_HOOK_TRANSPORT_SINK_VOLUME_CHANGED */PA_BLUETOOTH_HOOK_TRANSPORT_TX_VOLUME_GAIN_CHANGED;
+    } else {
+        pa_assert_not_reached();
+    }
 
-    /* increment volume by one to correct rounding errors */
-    if (volume < PA_VOLUME_NORM)
-        volume++;
-
-    t->rx_volume_gain = volume;
-    pa_hook_fire(pa_bluetooth_discovery_hook(t->device->discovery, /* PA_BLUETOOTH_HOOK_TRANSPORT_SOURCE_VOLUME_CHANGED */PA_BLUETOOTH_HOOK_TRANSPORT_RX_VOLUME_GAIN_CHANGED), t);
+    pa_hook_fire(pa_bluetooth_discovery_hook(t->device->discovery, hook), t);
 }
 
 void pa_bluetooth_transport_put(pa_bluetooth_transport *t) {
@@ -594,6 +616,49 @@ static void bluez5_transport_release_staled_pending_fd(struct pending_transport_
     pa_xfree(pending_transport_fd);
 }
 
+static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t gain) {
+    static const char *volume_str = "Volume";
+    static const char *mediatransport_str = BLUEZ_MEDIA_TRANSPORT_INTERFACE;
+    DBusMessage *m, *r;
+    DBusMessageIter iter;
+    DBusError err;
+
+    pa_assert(t);
+    pa_assert(t->device);
+    pa_assert(pa_bluetooth_profile_is_a2dp_sink(t->profile));
+    pa_assert(t->device->discovery);
+
+    // TODO: Pali already converted this
+    // gain = volume_to_a2dp_gain(volume);
+    // /* Propagate rounding and bound checks */
+    // volume = a2dp_gain_to_volume(gain);
+
+    if (t->tx_volume_gain == gain)
+        return;
+
+    dbus_error_init(&err);
+
+    pa_assert_se(m = dbus_message_new_method_call(BLUEZ_SERVICE, t->path, DBUS_INTERFACE_PROPERTIES, "Set"));
+
+    dbus_message_iter_init_append(m, &iter);
+    pa_assert_se(dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &mediatransport_str));
+    pa_assert_se(dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &volume_str));
+    pa_dbus_append_basic_variant(&iter, DBUS_TYPE_UINT16, &gain);
+
+    r = dbus_connection_send_with_reply_and_block(pa_dbus_connection_get(t->device->discovery->connection), m, -1, &err);
+    dbus_message_unref(m);
+    if (r)
+        dbus_message_unref(r);
+
+    if (dbus_error_is_set(&err)) {
+        pa_log_error("Failed to set Volume property on %s: %s", t->path, err.message);
+        dbus_error_free(&err);
+    } else {
+        pa_log_debug("Volume property set to %d on %s", gain, t->path);
+        t->tx_volume_gain = gain;
+    }
+}
+
 bool pa_bluetooth_device_any_transport_connected(const pa_bluetooth_device *d) {
     unsigned i, bluetooth_profile_count;
 
@@ -688,14 +753,14 @@ static void parse_transport_property(pa_bluetooth_transport *t, DBusMessageIter 
         }
 
         case DBUS_TYPE_UINT16: {
-            uint16_t uintValue;
-            dbus_message_iter_get_basic(&variant_i, &uintValue);
+            uint16_t value;
+            dbus_message_iter_get_basic(&variant_i, &value);
 
             if (pa_streq(key, "Volume")) {
-                if (pa_bluetooth_profile_is_a2dp_source(t->profile))
-                    pa_bluetooth_transport_set_source_volume(t, uintValue);
+                // TODO: Pali moved this conversion into module-bluez5-device...
+                // pa_volume_t volume = a2dp_gain_to_volume(value);
+                pa_bluetooth_transport_remote_volume_changed(t, /* volume */  (pa_volume_t)value);
             }
-
             break;
         }
     }
@@ -2063,6 +2128,11 @@ unsigned pa_bluetooth_profile_count(void) {
     return PA_BLUETOOTH_PROFILE_A2DP_START_INDEX + 2 * pa_bluetooth_a2dp_codec_count();
 }
 
+bool pa_bluetooth_profile_is_a2dp(pa_bluetooth_profile_t profile) {
+    pa_assert(profile < pa_bluetooth_profile_count());
+    return profile >= PA_BLUETOOTH_PROFILE_A2DP_START_INDEX;
+}
+
 bool pa_bluetooth_profile_is_a2dp_source(pa_bluetooth_profile_t profile) {
     unsigned source_start_index = PA_BLUETOOTH_PROFILE_A2DP_START_INDEX;
     unsigned sink_start_index = PA_BLUETOOTH_PROFILE_A2DP_START_INDEX + pa_bluetooth_a2dp_codec_count();
@@ -2292,11 +2362,12 @@ static DBusMessage *endpoint_set_configuration(DBusConnection *conn, DBusMessage
     /* AVRCP Absolute Volume is dynamically detected and enabled as soon as the
      * Volume property becomes available */
     t->rx_soft_volume = true;
-    t->tx_soft_volume = true;
-    t->max_rx_volume_gain = A2DP_MAX_VOLUME;
-    t->max_tx_volume_gain = A2DP_MAX_VOLUME;
+    t->tx_soft_volume = false;
+    t->max_rx_volume_gain = A2DP_MAX_GAIN;
+    t->max_tx_volume_gain = A2DP_MAX_GAIN;
     t->acquire = bluez5_transport_acquire_cb;
     t->release = bluez5_transport_release_cb;
+    t->set_tx_volume_gain = bluez5_transport_set_sink_volume;
     pa_bluetooth_transport_put(t);
 
     pa_log_debug("Transport %s available for profile %s", t->path, pa_bluetooth_profile_to_string(t->profile));
