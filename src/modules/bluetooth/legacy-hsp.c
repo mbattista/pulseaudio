@@ -353,12 +353,12 @@ static void rfcomm_io_callback(pa_mainloop_api *io, pa_io_event *e, int fd, pa_i
          * We support only local AG role and only microphone and speaker gain commands.
          * Leading space in sscanf format matches any amount of whitespace characters including none */
         if (sscanf(buf, " AT+VGS=%d", &gain) == 1 || sscanf(buf, " +VGS=%d", &gain) == 1) {
-            t->speaker_gain = gain;
-            pa_hook_fire(pa_bluetooth_discovery_hook(t->device->discovery, PA_BLUETOOTH_HOOK_TRANSPORT_SPEAKER_GAIN_CHANGED), t);
+            t->tx_volume_gain = gain;
+            pa_hook_fire(pa_bluetooth_discovery_hook(t->device->discovery, PA_BLUETOOTH_HOOK_TRANSPORT_TX_VOLUME_GAIN_CHANGED), t);
             success = true;
         } else if (sscanf(buf, " AT+VGM=%d", &gain) == 1 || sscanf(buf, " +VGM=%d", &gain) == 1) {
-            t->microphone_gain = gain;
-            pa_hook_fire(pa_bluetooth_discovery_hook(t->device->discovery, PA_BLUETOOTH_HOOK_TRANSPORT_MICROPHONE_GAIN_CHANGED), t);
+            t->rx_volume_gain = gain;
+            pa_hook_fire(pa_bluetooth_discovery_hook(t->device->discovery, PA_BLUETOOTH_HOOK_TRANSPORT_RX_VOLUME_GAIN_CHANGED), t);
             success = true;
         } else {
             success = false;
@@ -403,15 +403,15 @@ static void transport_destroy(pa_bluetooth_transport *t) {
     pa_xfree(trd);
 }
 
-static void set_speaker_gain(pa_bluetooth_transport *t, uint16_t gain) {
+static void set_tx_volume_gain(pa_bluetooth_transport *t, uint16_t gain) {
     struct transport_data *trd = t->userdata;
     char buf[512];
     ssize_t len, written;
 
-    if (t->speaker_gain == gain)
+    if (t->tx_volume_gain == gain)
       return;
 
-    t->speaker_gain = gain;
+    t->tx_volume_gain = gain;
 
     len = sprintf(buf, "\r\n+VGS=%d\r\n", gain);
     pa_log_debug("RFCOMM >> +VGS=%d", gain);
@@ -422,15 +422,15 @@ static void set_speaker_gain(pa_bluetooth_transport *t, uint16_t gain) {
         pa_log_error("RFCOMM write error: %s", pa_cstrerror(errno));
 }
 
-static void set_microphone_gain(pa_bluetooth_transport *t, uint16_t gain) {
+static void set_rx_volume_gain(pa_bluetooth_transport *t, uint16_t gain) {
     struct transport_data *trd = t->userdata;
     char buf[512];
     ssize_t len, written;
 
-    if (t->microphone_gain == gain)
+    if (t->rx_volume_gain == gain)
       return;
 
-    t->microphone_gain = gain;
+    t->rx_volume_gain = gain;
 
     len = sprintf(buf, "\r\n+VGM=%d\r\n", gain);
     pa_log_debug("RFCOMM >> +VGM=%d", gain);
@@ -485,11 +485,17 @@ static DBusMessage *profile_new_connection(DBusConnection *conn, DBusMessage *m,
     t = pa_bluetooth_transport_new(d, sender, pathfd, PA_BLUETOOTH_PROFILE_HSP_HEAD_UNIT, NULL, 0);
     pa_xfree(pathfd);
 
+    /* Expects that remote HSP headset supports volume control and we do not need to use local softvol */
+    t->rx_soft_volume = false;
+    t->tx_soft_volume = false;
+    t->max_rx_volume_gain = 15;
+    t->max_tx_volume_gain = 15;
+
     t->acquire = sco_acquire_cb;
     t->release = sco_release_cb;
     t->destroy = transport_destroy;
-    t->set_speaker_gain = set_speaker_gain;
-    t->set_microphone_gain = set_microphone_gain;
+    t->set_rx_volume_gain = set_rx_volume_gain;
+    t->set_tx_volume_gain = set_tx_volume_gain;
 
     trd = pa_xnew0(struct transport_data, 1);
     trd->rfcomm_fd = fd;
