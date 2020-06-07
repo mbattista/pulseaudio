@@ -988,16 +988,12 @@ static void source_set_volume_cb(pa_source *s) {
     pa_assert(u);
     pa_assert(u->source == s);
 
-    gain = (pa_cvolume_max(&s->real_volume) * u->transport->max_rx_volume_gain) / PA_VOLUME_NORM;
+    gain = (pa_cvolume_max(&s->real_volume) * u->transport->max_rx_volume_gain + PA_VOLUME_NORM / 2) / PA_VOLUME_NORM;
 
     if (gain > u->transport->max_rx_volume_gain)
         gain = u->transport->max_rx_volume_gain;
 
-    volume = (pa_volume_t) (gain * PA_VOLUME_NORM / u->transport->max_rx_volume_gain);
-
-    /* increment volume by one to correct rounding errors */
-    if (volume < PA_VOLUME_NORM)
-        volume++;
+    volume = (pa_volume_t) ((gain * PA_VOLUME_NORM + u->transport->max_rx_volume_gain / 2) / u->transport->max_rx_volume_gain);
 
     pa_cvolume_set(&s->real_volume, u->decoder_sample_spec.channels, volume);
 
@@ -1155,16 +1151,12 @@ static void sink_set_volume_cb(pa_sink *s) {
     pa_assert(u);
     pa_assert(u->sink == s);
 
-    gain = (pa_cvolume_max(&s->real_volume) * u->transport->max_tx_volume_gain) / PA_VOLUME_NORM;
+    gain = (pa_cvolume_max(&s->real_volume) * u->transport->max_tx_volume_gain + PA_VOLUME_NORM / 2) / PA_VOLUME_NORM;
 
     if (gain > u->transport->max_tx_volume_gain)
         gain = u->transport->max_tx_volume_gain;
 
-    volume = (pa_volume_t) (gain * PA_VOLUME_NORM / u->transport->max_tx_volume_gain);
-
-    /* increment volume by one to correct rounding errors */
-    if (volume < PA_VOLUME_NORM)
-        volume++;
+    volume = (pa_volume_t) ((gain * PA_VOLUME_NORM + u->transport->max_tx_volume_gain / 2) / u->transport->max_tx_volume_gain);
 
     pa_cvolume_set(&s->real_volume, u->encoder_sample_spec.channels, volume);
 
@@ -2443,11 +2435,10 @@ static pa_hook_result_t transport_tx_volume_gain_changed_cb(pa_bluetooth_discove
       return PA_HOOK_OK;
 
     gain = t->tx_volume_gain;
-    volume = (pa_volume_t) (gain * PA_VOLUME_NORM / t->max_tx_volume_gain);
+    volume = (pa_volume_t) ((gain * PA_VOLUME_NORM + t->max_tx_volume_gain / 2) / t->max_tx_volume_gain);
 
-    /* increment volume by one to correct rounding errors */
-    if (volume < PA_VOLUME_NORM)
-        volume++;
+    if (volume > PA_VOLUME_NORM)
+        volume = PA_VOLUME_NORM;
 
     pa_cvolume_set(&v, u->encoder_sample_spec.channels, volume);
 
@@ -2471,11 +2462,11 @@ static pa_hook_result_t transport_rx_volume_gain_changed_cb(pa_bluetooth_discove
       return PA_HOOK_OK;
 
     gain = t->rx_volume_gain;
-    volume = (pa_volume_t) (gain * PA_VOLUME_NORM / t->max_rx_volume_gain);
 
-    /* increment volume by one to correct rounding errors */
-    if (volume < PA_VOLUME_NORM)
-        volume++;
+    volume = (pa_volume_t)((gain * PA_VOLUME_NORM + t->max_rx_volume_gain / 2) / t->max_rx_volume_gain);
+
+    if (volume > PA_VOLUME_NORM)
+        volume = PA_VOLUME_NORM;
 
     pa_cvolume_set(&v, u->decoder_sample_spec.channels, volume);
 
