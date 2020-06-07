@@ -83,6 +83,8 @@
     " <node name=\"Source\"/>\n"                                               \
     "</node>\n"
 
+#define A2DP_MAX_VOLUME 127
+
 #define ENDPOINT_INTROSPECT_XML                                         \
     DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE                           \
     "<node>\n"                                                          \
@@ -414,6 +416,21 @@ pa_hashmap *pa_bluetooth_transport_get_all(pa_bluetooth_discovery *y) {
     return y->transports;
 }
 
+static void pa_bluetooth_transport_set_source_volume(pa_bluetooth_transport *t, uint16_t gain) {
+    pa_volume_t volume;
+
+    pa_assert(t);
+
+    volume = (pa_volume_t) (gain * PA_VOLUME_NORM / A2DP_MAX_VOLUME);
+
+    /* increment volume by one to correct rounding errors */
+    if (volume < PA_VOLUME_NORM)
+        volume++;
+
+    t->rx_volume_gain = volume;
+    pa_hook_fire(pa_bluetooth_discovery_hook(t->device->discovery, /* PA_BLUETOOTH_HOOK_TRANSPORT_SOURCE_VOLUME_CHANGED */PA_BLUETOOTH_HOOK_TRANSPORT_RX_VOLUME_GAIN_CHANGED), t);
+}
+
 void pa_bluetooth_transport_put(pa_bluetooth_transport *t) {
     pa_assert(t);
 
@@ -665,6 +682,18 @@ static void parse_transport_property(pa_bluetooth_transport *t, DBusMessageIter 
                 }
 
                 pa_bluetooth_transport_set_state(t, state);
+            }
+
+            break;
+        }
+
+        case DBUS_TYPE_UINT16: {
+            uint16_t uintValue;
+            dbus_message_iter_get_basic(&variant_i, &uintValue);
+
+            if (pa_streq(key, "Volume")) {
+                if (pa_bluetooth_profile_is_a2dp_source(t->profile))
+                    pa_bluetooth_transport_set_source_volume(t, uintValue);
             }
 
             break;
@@ -2260,11 +2289,12 @@ static DBusMessage *endpoint_set_configuration(DBusConnection *conn, DBusMessage
     dbus_message_unref(r);
 
     t = pa_bluetooth_transport_new(d, sender, path, p, config, size);
-    /* We do not support AVRCP Absolute Volume yet, so use softvol */
+    /* AVRCP Absolute Volume is dynamically detected and enabled as soon as the
+     * Volume property becomes available */
     t->rx_soft_volume = true;
     t->tx_soft_volume = true;
-    t->max_rx_volume_gain = PA_VOLUME_NORM;
-    t->max_tx_volume_gain = PA_VOLUME_NORM;
+    t->max_rx_volume_gain = A2DP_MAX_VOLUME;
+    t->max_tx_volume_gain = A2DP_MAX_VOLUME;
     t->acquire = bluez5_transport_acquire_cb;
     t->release = bluez5_transport_release_cb;
     pa_bluetooth_transport_put(t);
