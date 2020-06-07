@@ -2028,6 +2028,9 @@ static int set_profile_cb(pa_card *c, pa_card_profile *new_profile) {
         if (start_thread(u) < 0)
             goto off;
 
+    if (u->transport)
+        pa_bluetooth_transport_setup_a2dp_absolute_volume(u->transport);
+
     return 0;
 
 off:
@@ -2440,6 +2443,18 @@ static pa_hook_result_t transport_tx_volume_gain_changed_cb(pa_bluetooth_discove
     if (volume > PA_VOLUME_NORM)
         volume = PA_VOLUME_NORM;
 
+    if (pa_bluetooth_profile_is_a2dp_sink(t->profile)) {
+        if (!u->sink) {
+            pa_log_warn("Received a2dp gain change without connected sink");
+            return PA_HOOK_OK;
+        }
+
+        /* The first time this callback fires: peer supports Absolute Volume */
+        if (t->tx_soft_volume) {
+            t->tx_soft_volume = false;
+        }
+    }
+
     pa_cvolume_set(&v, u->encoder_sample_spec.channels, volume);
 
     if (!t->tx_soft_volume)
@@ -2467,6 +2482,19 @@ static pa_hook_result_t transport_rx_volume_gain_changed_cb(pa_bluetooth_discove
 
     if (volume > PA_VOLUME_NORM)
         volume = PA_VOLUME_NORM;
+
+    if (pa_bluetooth_profile_is_a2dp_source(t->profile)) {
+        if (!u->source) {
+            pa_log_warn("Received a2dp gain change without connected source");
+            return PA_HOOK_OK;
+        }
+
+        /* The first time this callback fires: peer supports Absolute Volume */
+        if (t->rx_soft_volume) {
+            source_set_a2dp_remote_controlled(u->source);
+            t->rx_soft_volume = false;
+        }
+    }
 
     pa_cvolume_set(&v, u->decoder_sample_spec.channels, volume);
 
@@ -2580,6 +2608,9 @@ int pa__init(pa_module* m) {
     if (u->sink || u->source)
         if (start_thread(u) < 0)
             goto off;
+
+    if (u->transport)
+        pa_bluetooth_transport_setup_a2dp_absolute_volume(u->transport);
 
     return 0;
 
