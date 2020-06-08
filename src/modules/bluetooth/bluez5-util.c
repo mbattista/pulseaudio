@@ -616,43 +616,23 @@ static void bluez5_transport_release_staled_pending_fd(struct pending_transport_
     pa_xfree(pending_transport_fd);
 }
 
-struct set_volume_and_transport {
-    pa_bluetooth_transport *t;
-    uint16_t gain;
-};
-
 static void set_volume_reply(DBusPendingCall *pending, void *userdata) {
     DBusMessage *r;
     pa_dbus_pending *p;
     pa_bluetooth_discovery *y;
-    struct set_volume_and_transport *call_data;
-    pa_bluetooth_transport *t;
+    // pa_bluetooth_transport *t;
 
     pa_assert(pending);
     pa_assert_se(p = userdata);
     pa_assert_se(y = p->context_data);
-    pa_assert_se(call_data = p->call_data);
-    pa_assert_se(t = call_data->t);
+    // pa_assert_se(t = p->call_data);
     pa_assert_se(r = dbus_pending_call_steal_reply(pending));
 
     if (dbus_message_get_type(r) == DBUS_MESSAGE_TYPE_ERROR) {
         pa_log_error(BLUEZ_MEDIA_TRANSPORT_INTERFACE ".Volume set failed: %s: %s",
                      dbus_message_get_error_name(r),
                      pa_dbus_get_error_message(r));
-        goto finish;
     }
-
-    pa_log_debug("Volume property set to %d on %s", call_data->gain, t->path);
-
-    if (pa_bluetooth_profile_is_a2dp_sink(t->profile))
-        t->tx_volume_gain = call_data->gain;
-    else if (pa_bluetooth_profile_is_a2dp_source(t->profile))
-        t->rx_volume_gain= call_data->gain;
-    else
-        pa_assert_not_reached();
-
-finish:
-    pa_xfree(call_data);
 
     dbus_message_unref(r);
 
@@ -663,7 +643,6 @@ finish:
 static void bluez5_transport_set_volume(pa_bluetooth_transport *t, uint16_t gain) {
     static const char *volume_str = "Volume";
     static const char *mediatransport_str = BLUEZ_MEDIA_TRANSPORT_INTERFACE;
-    struct set_volume_and_transport *call_data;
     DBusMessage *m;
     DBusMessageIter iter;
 
@@ -689,11 +668,7 @@ static void bluez5_transport_set_volume(pa_bluetooth_transport *t, uint16_t gain
     pa_assert_se(dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &volume_str));
     pa_dbus_append_basic_variant(&iter, DBUS_TYPE_UINT16, &gain);
 
-    call_data = pa_xnew0(struct set_volume_and_transport, 1);
-    call_data->t = t;
-    call_data->gain = gain;
-
-    send_and_add_to_pending(t->device->discovery, m, set_volume_reply, call_data);
+    send_and_add_to_pending(t->device->discovery, m, set_volume_reply, t);
 }
 
 static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t gain) {
