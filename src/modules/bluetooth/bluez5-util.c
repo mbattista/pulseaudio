@@ -597,30 +597,6 @@ static void bluez5_transport_release_staled_pending_fd(struct pending_transport_
     pa_xfree(pending_transport_fd);
 }
 
-static void set_volume_reply(DBusPendingCall *pending, void *userdata) {
-    DBusMessage *r;
-    pa_dbus_pending *p;
-    pa_bluetooth_discovery *y;
-
-    pa_assert(pending);
-    pa_assert_se(p = userdata);
-    pa_assert_se(y = p->context_data);
-    pa_assert_se(r = dbus_pending_call_steal_reply(pending));
-
-    if (dbus_message_get_type(r) == DBUS_MESSAGE_TYPE_ERROR) {
-        pa_log_error(DBUS_INTERFACE_PROPERTIES ".Set %s Volume failed: %s: %s",
-                     dbus_message_get_path(p->message),
-                     dbus_message_get_error_name(r),
-                     pa_dbus_get_error_message(r));
-    }
-
-/* finish: */
-    dbus_message_unref(r);
-
-    PA_LLIST_REMOVE(pa_dbus_pending, y->pending, p);
-    pa_dbus_pending_free(p);
-}
-
 static void bluez5_transport_set_volume(pa_bluetooth_transport *t, uint16_t gain) {
     static const char *volume_str = "Volume";
     static const char *mediatransport_str = BLUEZ_MEDIA_TRANSPORT_INTERFACE;
@@ -644,7 +620,10 @@ static void bluez5_transport_set_volume(pa_bluetooth_transport *t, uint16_t gain
     pa_assert_se(dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &volume_str));
     pa_dbus_append_basic_variant(&iter, DBUS_TYPE_UINT16, &gain);
 
-    send_and_add_to_pending(t->device->discovery, m, set_volume_reply, NULL);
+    /* Ignore replies, instead wait for the Volume property changed notification */
+    dbus_message_set_no_reply(m, true);
+    pa_assert_se(dbus_connection_send(pa_dbus_connection_get(t->device->discovery->connection), m, NULL));
+    dbus_message_unref(m);
 }
 
 static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t gain) {
