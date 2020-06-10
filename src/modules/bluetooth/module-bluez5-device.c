@@ -1001,6 +1001,7 @@ static void source_set_volume_cb(pa_source *s) {
     if (u->transport->rx_soft_volume)
         pa_cvolume_set(&s->soft_volume, u->decoder_sample_spec.channels, volume);
     else
+        // TODO: passthrough?
         pa_cvolume_reset(&s->soft_volume, u->decoder_sample_spec.channels);
 
     if (u->transport->set_rx_volume_gain)
@@ -1164,6 +1165,7 @@ static void sink_set_volume_cb(pa_sink *s) {
     if (u->transport->tx_soft_volume)
         pa_cvolume_set(&s->soft_volume, u->encoder_sample_spec.channels, volume);
     else
+        // TODO: Passthrough?
         pa_cvolume_reset(&s->soft_volume, u->encoder_sample_spec.channels);
 
     if (u->transport->set_tx_volume_gain)
@@ -2439,6 +2441,19 @@ static pa_hook_result_t transport_tx_volume_gain_changed_cb(pa_bluetooth_discove
 
     if (volume > PA_VOLUME_NORM)
         volume = PA_VOLUME_NORM;
+
+    if (pa_bluetooth_profile_is_a2dp_sink(t->profile)) {
+        if (!u->sink) {
+            pa_log_warn("Received a2dp gain change without connected sink");
+            return PA_HOOK_OK;
+        }
+
+        /* The first time this callback fires: peer supports Absolute Volume */
+        if (t->tx_soft_volume) {
+            t->tx_soft_volume = false;
+            pa_sink_enter_passthrough(u->sink);
+        }
+    }
 
     pa_cvolume_set(&v, u->encoder_sample_spec.channels, volume);
 
