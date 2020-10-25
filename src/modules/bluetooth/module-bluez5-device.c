@@ -1917,7 +1917,7 @@ static pa_card_profile *create_card_profile(struct userdata *u, pa_bluetooth_pro
             description = _("Headset Audio Gateway (HSP)");
         else
             description = _("Headset Audio Gateway (HFP)");
-        cp = pa_card_profile_new(name, description, sizeof(pa_bluetooth_profile_t));
+        cp = pa_card_profile_new(name, description, sizeof(*cp));
         cp->priority = profile;
         cp->n_sinks = 1;
         cp->n_sources = 1;
@@ -1937,7 +1937,7 @@ static pa_card_profile *create_card_profile(struct userdata *u, pa_bluetooth_pro
         else
             description = pa_sprintf_malloc(_("High Fidelity Capture (A2DP Source) with codec %s"), a2dp_codec->description);
 
-        cp = pa_card_profile_new(name, description, sizeof(pa_bluetooth_profile_t));
+        cp = pa_card_profile_new(name, description, sizeof(*cp));
         pa_xfree(description);
 
         cp->priority = profile;
@@ -2205,7 +2205,7 @@ static int add_card(struct userdata *u) {
 
     pa_assert(!pa_hashmap_isempty(data.profiles));
 
-    cp = pa_card_profile_new("off", _("Off"), sizeof(pa_bluetooth_profile_t));
+    cp = pa_card_profile_new("off", _("Off"), sizeof(*cp));
     cp->available = PA_AVAILABLE_YES;
     p = PA_CARD_PROFILE_DATA(cp);
     *p = PA_BLUETOOTH_PROFILE_OFF;
