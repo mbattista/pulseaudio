@@ -613,6 +613,8 @@ static void bluez5_transport_set_volume(pa_bluetooth_transport *t, uint16_t gain
     else if (pa_bluetooth_profile_is_a2dp_sink(t->profile) && t->tx_volume_gain == gain)
         return;
 
+    pa_log_debug("Sending A2DP volume %d/127 to peer", gain);
+
     pa_assert_se(m = dbus_message_new_method_call(BLUEZ_SERVICE, t->path, DBUS_INTERFACE_PROPERTIES, "Set"));
 
     dbus_message_iter_init_append(m, &iter);
