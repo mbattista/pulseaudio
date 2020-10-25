@@ -418,10 +418,17 @@ pa_hashmap *pa_bluetooth_transport_get_all(pa_bluetooth_discovery *y) {
 
 static void pa_bluetooth_transport_remote_volume_changed(pa_bluetooth_transport *t, pa_volume_t volume) {
     pa_bluetooth_hook_t hook;
+    bool is_source;
 
     pa_assert(t);
 
-    if (pa_bluetooth_profile_is_a2dp_source(t->profile)) {
+    is_source = pa_bluetooth_profile_is_a2dp_source(t->profile);
+
+    pa_log_debug("Reporting volume change %d/127 for %s",
+                 volume,
+                 is_source ? "source" : "sink");
+
+    if (is_source) {
         t->rx_volume_gain = volume;
         hook = PA_BLUETOOTH_HOOK_TRANSPORT_RX_VOLUME_GAIN_CHANGED;
     } else if (pa_bluetooth_profile_is_a2dp_sink(t->profile)) {
@@ -770,6 +777,8 @@ static void parse_transport_property(pa_bluetooth_transport *t, DBusMessageIter 
     key = check_variant_property(i);
     if (key == NULL)
         return;
+
+    pa_log_debug("Transport property %s changed", key);
 
     dbus_message_iter_recurse(i, &variant_i);
 
