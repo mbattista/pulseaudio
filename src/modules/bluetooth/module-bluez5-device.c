@@ -2438,8 +2438,15 @@ static void sink_set_a2dp_remote_controlled(pa_sink *s) {
     // pa_sink_set_set_volume_callback(s, sink_set_volume_cb);
     // s->n_volume_steps = A2DP_MAX_GAIN + 1;
 
+    // Temporarily disable volume callback to change to passthrough
+    // This would otherwise send 100% to the sink, which is not
+    // nice on the ears...
+    pa_sink_set_set_volume_callback(s, NULL);
+
     /* Reset local attenuation */
     pa_sink_enter_passthrough(s);
+
+    pa_sink_set_set_volume_callback(s, sink_set_volume_cb);
 }
 
 static pa_hook_result_t transport_tx_volume_gain_changed_cb(pa_bluetooth_discovery *y, pa_bluetooth_transport *t, struct userdata *u) {
