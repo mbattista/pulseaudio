@@ -2030,6 +2030,9 @@ static int set_profile_cb(pa_card *c, pa_card_profile *new_profile) {
         if (start_thread(u) < 0)
             goto off;
 
+    if (u->transport)
+        pa_bluetooth_transport_setup_a2dp_absolute_volume(u->transport);
+
     return 0;
 
 off:
@@ -2443,8 +2446,11 @@ static void sink_set_a2dp_remote_controlled(pa_sink *s) {
     // nice on the ears...
     pa_sink_set_set_volume_callback(s, NULL);
 
-    /* Reset local attenuation */
-    pa_sink_enter_passthrough(s);
+    if (!PA_SINK_IS_LINKED(s->state) || (s->monitor_source && !PA_SOURCE_IS_LINKED(s->monitor_source->state)))
+        pa_log_error("Sink or monitor source are not linked, can't set passthrough!");
+    else
+        /* Reset local attenuation */
+        pa_sink_enter_passthrough(s);
 
     pa_sink_set_set_volume_callback(s, sink_set_volume_cb);
 }
@@ -2647,6 +2653,9 @@ int pa__init(pa_module* m) {
     if (u->sink || u->source)
         if (start_thread(u) < 0)
             goto off;
+
+    if (u->transport)
+        pa_bluetooth_transport_setup_a2dp_absolute_volume(u->transport);
 
     return 0;
 
