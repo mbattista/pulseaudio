@@ -608,7 +608,8 @@ static void set_volume_reply(DBusPendingCall *pending, void *userdata) {
     pa_assert_se(r = dbus_pending_call_steal_reply(pending));
 
     if (dbus_message_get_type(r) == DBUS_MESSAGE_TYPE_ERROR) {
-        pa_log_error(BLUEZ_MEDIA_TRANSPORT_INTERFACE ".Volume set failed: %s: %s",
+        pa_log_error(DBUS_INTERFACE_PROPERTIES ".Set %s Volume failed: %s: %s",
+                     dbus_message_get_path(p->message),
                      dbus_message_get_error_name(r),
                      pa_dbus_get_error_message(r));
     }
