@@ -659,39 +659,27 @@ static void bluez5_transport_set_source_volume(pa_bluetooth_transport *t, uint16
     bluez5_transport_set_volume(t, gain);
 }
 
-static int16_t bluez5_transport_get_volume(pa_bluetooth_transport *t) {
-    static const char *volume_str = "Volume";
-    static const char *mediatransport_str = BLUEZ_MEDIA_TRANSPORT_INTERFACE;
-    DBusMessage *m, *r;
+static void request_volume_reply(DBusPendingCall *pending, void *userdata) {
+    DBusMessage *r;
     DBusMessageIter iter, variant;
-    DBusError err;
+    pa_dbus_pending *p;
+    pa_bluetooth_discovery *y;
+    pa_bluetooth_transport *t;
     uint16_t gain;
 
-    pa_assert(t);
-    pa_assert(t->device);
-    pa_assert(t->device->discovery);
+    pa_assert(pending);
+    pa_assert_se(p = userdata);
+    pa_assert_se(y = p->context_data);
+    pa_assert_se(t = p->call_data);
+    pa_assert_se(r = dbus_pending_call_steal_reply(pending));
 
-    pa_assert(pa_bluetooth_profile_is_a2dp(t->profile));
-
-    dbus_error_init(&err);
-
-    pa_assert_se(m = dbus_message_new_method_call(BLUEZ_SERVICE, t->path, DBUS_INTERFACE_PROPERTIES, "Get"));
-    pa_assert_se(dbus_message_append_args(m,
-        DBUS_TYPE_STRING, &mediatransport_str,
-        DBUS_TYPE_STRING, &volume_str,
-        DBUS_TYPE_INVALID));
-
-    r = dbus_connection_send_with_reply_and_block(pa_dbus_connection_get(t->device->discovery->connection), m, -1, &err);
-    dbus_message_unref(m);
-    if (r)
-        dbus_message_unref(r);
-
-    if (dbus_error_is_set(&err)) {
-        pa_log_info("Volume property not found, A2DP Absolute Volume not supported");
-        dbus_error_free(&err);
-        return -1;
+    if (dbus_message_get_type(r) == DBUS_MESSAGE_TYPE_ERROR) {
+        pa_log_error(DBUS_INTERFACE_PROPERTIES ".Get %s Volume failed: %s: %s",
+                     dbus_message_get_path(p->message),
+                     dbus_message_get_error_name(r),
+                     pa_dbus_get_error_message(r));
+        goto finish;
     }
-
     dbus_message_iter_init(r, &iter);
     pa_assert(dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_VARIANT);
     dbus_message_iter_recurse(&iter, &variant);
@@ -701,9 +689,35 @@ static int16_t bluez5_transport_get_volume(pa_bluetooth_transport *t) {
     if (gain > A2DP_MAX_GAIN)
         gain = A2DP_MAX_GAIN;
 
-    pa_log_debug("A2DP Absolute Volume = %d", gain);
+    pa_log_debug("Received A2DP Absolute Volume %d", gain);
 
-    return (int16_t)gain;
+    pa_bluetooth_transport_remote_volume_changed(t, gain);
+
+finish:
+    dbus_message_unref(r);
+
+    PA_LLIST_REMOVE(pa_dbus_pending, y->pending, p);
+    pa_dbus_pending_free(p);
+}
+
+static void bluez5_transport_request_volume(pa_bluetooth_transport *t) {
+    static const char *volume_str = "Volume";
+    static const char *mediatransport_str = BLUEZ_MEDIA_TRANSPORT_INTERFACE;
+    DBusMessage *m;
+
+    pa_assert(t);
+    pa_assert(t->device);
+    pa_assert(t->device->discovery);
+
+    pa_assert(pa_bluetooth_profile_is_a2dp(t->profile));
+
+    pa_assert_se(m = dbus_message_new_method_call(BLUEZ_SERVICE, t->path, DBUS_INTERFACE_PROPERTIES, "Get"));
+    pa_assert_se(dbus_message_append_args(m,
+        DBUS_TYPE_STRING, &mediatransport_str,
+        DBUS_TYPE_STRING, &volume_str,
+        DBUS_TYPE_INVALID));
+
+    send_and_add_to_pending(t->device->discovery, m, request_volume_reply, t);
 }
 
 bool pa_bluetooth_device_any_transport_connected(const pa_bluetooth_device *d) {
@@ -2295,7 +2309,6 @@ static DBusMessage *endpoint_set_configuration(DBusConnection *conn, DBusMessage
     pa_bluetooth_profile_t p = PA_BLUETOOTH_PROFILE_OFF;
     DBusMessageIter args, props;
     DBusMessage *r;
-    int16_t gain;
 
     if (!dbus_message_iter_init(m, &args) || !pa_streq(dbus_message_get_signature(m), "oa{sv}")) {
         pa_log_error("Invalid signature for method SetConfiguration()");
@@ -2415,16 +2428,12 @@ static DBusMessage *endpoint_set_configuration(DBusConnection *conn, DBusMessage
     t->release = bluez5_transport_release_cb;
     t->set_rx_volume_gain = bluez5_transport_set_source_volume;
     t->set_tx_volume_gain = bluez5_transport_set_sink_volume;
-
     pa_bluetooth_transport_put(t);
 
     pa_log_debug("Transport %s available for profile %s", t->path, pa_bluetooth_profile_to_string(t->profile));
 
     /* A2DP Absolute Volume control (AVRCP 1.4) is optional */
-    gain = bluez5_transport_get_volume(t);
-    if (gain >= 0)
-        /* Request bluez5-device to set up callbacks */
-        pa_bluetooth_transport_remote_volume_changed(t, gain);
+    bluez5_transport_request_volume(t);
 
     return NULL;
 
