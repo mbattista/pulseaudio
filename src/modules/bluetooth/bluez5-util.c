@@ -710,8 +710,10 @@ static void bluez5_transport_request_volume(pa_bluetooth_transport *t) {
 
 void pa_bluetooth_transport_setup_a2dp_absolute_volume(pa_bluetooth_transport *t) {
     pa_assert(t);
-    /* A2DP Absolute Volume control (AVRCP 1.4) is optional */
-    bluez5_transport_request_volume(t);
+
+    if (pa_bluetooth_profile_is_a2dp_sink(t->profile) || pa_bluetooth_profile_is_a2dp_source(t->profile))
+        /* A2DP Absolute Volume control (AVRCP 1.4) is optional */
+        bluez5_transport_request_volume(t);
 }
 
 bool pa_bluetooth_device_any_transport_connected(const pa_bluetooth_device *d) {
