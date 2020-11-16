@@ -2028,9 +2028,6 @@ static int set_profile_cb(pa_card *c, pa_card_profile *new_profile) {
         if (start_thread(u) < 0)
             goto off;
 
-    if (u->transport)
-        pa_bluetooth_transport_setup_a2dp_absolute_volume(u->transport);
-
     return 0;
 
 off:
@@ -2589,9 +2586,6 @@ int pa__init(pa_module* m) {
     if (u->sink || u->source)
         if (start_thread(u) < 0)
             goto off;
-
-    if (u->transport)
-        pa_bluetooth_transport_setup_a2dp_absolute_volume(u->transport);
 
     return 0;
 

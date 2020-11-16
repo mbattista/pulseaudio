@@ -543,6 +543,8 @@ success:
     pa_xfree(path);
 }
 
+static void bluez5_transport_request_volume(pa_bluetooth_transport *t);
+
 static int bluez5_transport_acquire_cb(pa_bluetooth_transport *t, size_t *imtu, size_t *omtu) {
     struct pending_transport_fd *pending_transport_fd;
     DBusMessage *m;
@@ -566,6 +568,8 @@ static int bluez5_transport_acquire_cb(pa_bluetooth_transport *t, size_t *imtu, 
 
     if (omtu)
         *omtu = pending_transport_fd->omtu;
+
+    bluez5_transport_request_volume(t);
 
     pa_xfree(pending_transport_fd->path);
     pa_xfree(pending_transport_fd);
@@ -710,14 +714,6 @@ static void bluez5_transport_request_volume(pa_bluetooth_transport *t) {
         DBUS_TYPE_INVALID));
 
     send_and_add_to_pending(t->device->discovery, m, request_volume_reply, t);
-}
-
-void pa_bluetooth_transport_setup_a2dp_absolute_volume(pa_bluetooth_transport *t) {
-    pa_assert(t);
-
-    if (pa_bluetooth_profile_is_a2dp_sink(t->profile) || pa_bluetooth_profile_is_a2dp_source(t->profile))
-        /* A2DP Absolute Volume control (AVRCP 1.4) is optional */
-        bluez5_transport_request_volume(t);
 }
 
 bool pa_bluetooth_device_any_transport_connected(const pa_bluetooth_device *d) {
