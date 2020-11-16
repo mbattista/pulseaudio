@@ -429,9 +429,13 @@ static void pa_bluetooth_transport_remote_volume_changed(pa_bluetooth_transport 
                  is_source ? "source" : "sink");
 
     if (is_source) {
+        if (t->rx_soft_volume)
+            t->rx_soft_volume = false;
         t->rx_volume_gain = volume;
         hook = PA_BLUETOOTH_HOOK_TRANSPORT_RX_VOLUME_GAIN_CHANGED;
     } else if (pa_bluetooth_profile_is_a2dp_sink(t->profile)) {
+        if (t->tx_soft_volume)
+            t->tx_soft_volume = false;
         t->tx_volume_gain = volume;
         hook = PA_BLUETOOTH_HOOK_TRANSPORT_TX_VOLUME_GAIN_CHANGED;
     } else {

@@ -2437,23 +2437,14 @@ static pa_hook_result_t transport_tx_volume_gain_changed_cb(pa_bluetooth_discove
     if (t != u->transport)
       return PA_HOOK_OK;
 
+    if (!u->sink)
+        return PA_HOOK_OK;
+
     gain = t->tx_volume_gain;
     volume = (pa_volume_t) ((gain * PA_VOLUME_NORM + t->max_tx_volume_gain / 2) / t->max_tx_volume_gain);
 
     if (volume > PA_VOLUME_NORM)
         volume = PA_VOLUME_NORM;
-
-    if (pa_bluetooth_profile_is_a2dp_sink(t->profile)) {
-        if (!u->sink) {
-            pa_log_warn("Received a2dp gain change without connected sink");
-            return PA_HOOK_OK;
-        }
-
-        /* The first time this callback fires: peer supports Absolute Volume */
-        if (t->tx_soft_volume) {
-            t->tx_soft_volume = false;
-        }
-    }
 
     pa_cvolume_set(&v, u->encoder_sample_spec.channels, volume);
 
@@ -2476,24 +2467,15 @@ static pa_hook_result_t transport_rx_volume_gain_changed_cb(pa_bluetooth_discove
     if (t != u->transport)
       return PA_HOOK_OK;
 
+    if (!u->source)
+        return PA_HOOK_OK;
+
     gain = t->rx_volume_gain;
 
     volume = (pa_volume_t)((gain * PA_VOLUME_NORM + t->max_rx_volume_gain / 2) / t->max_rx_volume_gain);
 
     if (volume > PA_VOLUME_NORM)
         volume = PA_VOLUME_NORM;
-
-    if (pa_bluetooth_profile_is_a2dp_source(t->profile)) {
-        if (!u->source) {
-            pa_log_warn("Received a2dp gain change without connected source");
-            return PA_HOOK_OK;
-        }
-
-        /* The first time this callback fires: peer supports Absolute Volume */
-        if (t->rx_soft_volume) {
-            t->rx_soft_volume = false;
-        }
-    }
 
     pa_cvolume_set(&v, u->decoder_sample_spec.channels, volume);
 
