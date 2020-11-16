@@ -1001,7 +1001,6 @@ static void source_set_volume_cb(pa_source *s) {
     if (u->transport->rx_soft_volume)
         pa_cvolume_set(&s->soft_volume, u->decoder_sample_spec.channels, volume);
     else
-        // TODO: Passthrough?
         pa_cvolume_reset(&s->soft_volume, u->decoder_sample_spec.channels);
 
     if (u->transport->set_rx_volume_gain)
@@ -1165,7 +1164,6 @@ static void sink_set_volume_cb(pa_sink *s) {
     if (u->transport->tx_soft_volume)
         pa_cvolume_set(&s->soft_volume, u->encoder_sample_spec.channels, volume);
     else
-        // TODO: Passthrough?
         pa_cvolume_reset(&s->soft_volume, u->encoder_sample_spec.channels);
 
     if (u->transport->set_tx_volume_gain)
@@ -2428,33 +2426,6 @@ static pa_hook_result_t transport_state_changed_cb(pa_bluetooth_discovery *y, pa
     return PA_HOOK_OK;
 }
 
-static void sink_set_a2dp_remote_controlled(pa_sink *s) {
-    struct userdata *u;
-
-    pa_assert(s);
-    pa_assert(s->core);
-
-    u = s->userdata;
-    pa_assert(u);
-    pa_assert(u->sink == s);
-
-    // pa_sink_set_set_volume_callback(s, sink_set_volume_cb);
-    // s->n_volume_steps = A2DP_MAX_GAIN + 1;
-
-    // Temporarily disable volume callback to change to passthrough
-    // This would otherwise send 100% to the sink, which is not
-    // nice on the ears...
-    pa_sink_set_set_volume_callback(s, NULL);
-
-    if (!PA_SINK_IS_LINKED(s->state) || (s->monitor_source && !PA_SOURCE_IS_LINKED(s->monitor_source->state)))
-        pa_log_error("Sink or monitor source are not linked, can't set passthrough!");
-    else
-        /* Reset local attenuation */
-        pa_sink_enter_passthrough(s);
-
-    pa_sink_set_set_volume_callback(s, sink_set_volume_cb);
-}
-
 static pa_hook_result_t transport_tx_volume_gain_changed_cb(pa_bluetooth_discovery *y, pa_bluetooth_transport *t, struct userdata *u) {
     pa_volume_t volume;
     pa_cvolume v;
@@ -2480,7 +2451,6 @@ static pa_hook_result_t transport_tx_volume_gain_changed_cb(pa_bluetooth_discove
 
         /* The first time this callback fires: peer supports Absolute Volume */
         if (t->tx_soft_volume) {
-            sink_set_a2dp_remote_controlled(u->sink);
             t->tx_soft_volume = false;
         }
     }
