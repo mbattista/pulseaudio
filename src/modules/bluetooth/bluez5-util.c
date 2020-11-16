@@ -416,7 +416,7 @@ pa_hashmap *pa_bluetooth_transport_get_all(pa_bluetooth_discovery *y) {
     return y->transports;
 }
 
-static void pa_bluetooth_transport_remote_volume_changed(pa_bluetooth_transport *t, pa_volume_t volume) {
+static void pa_bluetooth_transport_remote_volume_changed(pa_bluetooth_transport *t, uint16_t volume) {
     pa_bluetooth_hook_t hook;
     bool is_source;
 
