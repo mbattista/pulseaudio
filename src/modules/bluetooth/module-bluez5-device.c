@@ -2453,7 +2453,7 @@ static pa_hook_result_t transport_tx_volume_gain_changed_cb(pa_bluetooth_discove
 
     pa_cvolume_set(&v, u->encoder_sample_spec.channels, volume);
 
-    if (!t->tx_soft_volume)
+    if (!t->tx_soft_volume && pa_cvolume_is_norm(&u->sink->soft_volume))
         pa_sink_volume_changed(u->sink, &v);
     else
         pa_sink_set_volume(u->sink, &v, true, true);
@@ -2483,7 +2483,7 @@ static pa_hook_result_t transport_rx_volume_gain_changed_cb(pa_bluetooth_discove
 
     pa_cvolume_set(&v, u->decoder_sample_spec.channels, volume);
 
-    if (!t->rx_soft_volume)
+    if (!t->rx_soft_volume && pa_cvolume_is_norm(&u->source->soft_volume))
         pa_source_volume_changed(u->source, &v);
     else
         pa_source_set_volume(u->source, &v, true, true);
