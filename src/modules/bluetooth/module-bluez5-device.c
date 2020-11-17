@@ -988,20 +988,24 @@ static void source_set_volume_cb(pa_source *s) {
     pa_assert(u);
     pa_assert(u->source == s);
 
-    gain = (pa_cvolume_max(&s->real_volume) * u->transport->max_rx_volume_gain + PA_VOLUME_NORM / 2) / PA_VOLUME_NORM;
+    volume = pa_cvolume_max(&s->real_volume);
+    gain = (volume * u->transport->max_rx_volume_gain + PA_VOLUME_NORM / 2) / PA_VOLUME_NORM;
 
-    if (gain > u->transport->max_rx_volume_gain)
+    if (gain > u->transport->max_rx_volume_gain) {
         gain = u->transport->max_rx_volume_gain;
 
-    volume = (pa_volume_t) ((gain * PA_VOLUME_NORM + u->transport->max_rx_volume_gain / 2) / u->transport->max_rx_volume_gain);
-
-    pa_cvolume_set(&s->real_volume, u->decoder_sample_spec.channels, volume);
-
-    /* Set soft volume when transport requires it, otherwise reset soft volume to default */
-    if (u->transport->rx_soft_volume)
+        /* Requested volume is above maximum, always set soft volume */
         pa_cvolume_set(&s->soft_volume, u->decoder_sample_spec.channels, volume);
-    else
-        pa_cvolume_reset(&s->soft_volume, u->decoder_sample_spec.channels);
+    } else {
+        volume = (pa_volume_t) ((gain * PA_VOLUME_NORM + u->transport->max_rx_volume_gain / 2) / u->transport->max_rx_volume_gain);
+        pa_cvolume_set(&s->real_volume, u->decoder_sample_spec.channels, volume);
+
+        /* Set soft volume when transport requires it, otherwise reset soft volume to default */
+        if (u->transport->rx_soft_volume)
+            pa_cvolume_set(&s->soft_volume, u->decoder_sample_spec.channels, volume);
+        else
+            pa_cvolume_reset(&s->soft_volume, u->decoder_sample_spec.channels);
+    }
 
     if (u->transport->set_rx_volume_gain)
         u->transport->set_rx_volume_gain(u->transport, gain);
@@ -1151,20 +1155,24 @@ static void sink_set_volume_cb(pa_sink *s) {
     pa_assert(u);
     pa_assert(u->sink == s);
 
-    gain = (pa_cvolume_max(&s->real_volume) * u->transport->max_tx_volume_gain + PA_VOLUME_NORM / 2) / PA_VOLUME_NORM;
+    volume = pa_cvolume_max(&s->real_volume);
+    gain = (volume * u->transport->max_tx_volume_gain + PA_VOLUME_NORM / 2) / PA_VOLUME_NORM;
 
-    if (gain > u->transport->max_tx_volume_gain)
+    if (gain > u->transport->max_tx_volume_gain) {
         gain = u->transport->max_tx_volume_gain;
 
-    volume = (pa_volume_t) ((gain * PA_VOLUME_NORM + u->transport->max_tx_volume_gain / 2) / u->transport->max_tx_volume_gain);
-
-    pa_cvolume_set(&s->real_volume, u->encoder_sample_spec.channels, volume);
-
-    /* Set soft volume when transport requires it, otherwise reset soft volume to default */
-    if (u->transport->tx_soft_volume)
+        /* Requested volume is above maximum, always set soft volume */
         pa_cvolume_set(&s->soft_volume, u->encoder_sample_spec.channels, volume);
-    else
-        pa_cvolume_reset(&s->soft_volume, u->encoder_sample_spec.channels);
+    } else {
+        volume = (pa_volume_t) ((gain * PA_VOLUME_NORM + u->transport->max_tx_volume_gain / 2) / u->transport->max_tx_volume_gain);
+        pa_cvolume_set(&s->real_volume, u->encoder_sample_spec.channels, volume);
+
+        /* Set soft volume when transport requires it, otherwise reset soft volume to default */
+        if (u->transport->tx_soft_volume)
+            pa_cvolume_set(&s->soft_volume, u->encoder_sample_spec.channels, volume);
+        else
+            pa_cvolume_reset(&s->soft_volume, u->encoder_sample_spec.channels);
+    }
 
     if (u->transport->set_tx_volume_gain)
         u->transport->set_tx_volume_gain(u->transport, gain);
