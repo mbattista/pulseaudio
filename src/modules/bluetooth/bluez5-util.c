@@ -645,14 +645,18 @@ static void bluez5_transport_set_volume(pa_bluetooth_transport *t, uint16_t gain
 
 static void bluez5_transport_set_sink_volume(pa_bluetooth_transport *t, uint16_t gain) {
     pa_assert(t);
-    pa_assert(pa_bluetooth_profile_is_a2dp_sink(t->profile));
-    bluez5_transport_set_volume(t, gain);
+
+    /* Currently we can set absolute volume for sink only in A2DP sink profile */
+    if (pa_bluetooth_profile_is_a2dp_sink(t->profile))
+        bluez5_transport_set_volume(t, gain);
 }
 
 static void bluez5_transport_set_source_volume(pa_bluetooth_transport *t, uint16_t gain) {
     pa_assert(t);
-    pa_assert(pa_bluetooth_profile_is_a2dp_source(t->profile));
-    bluez5_transport_set_volume(t, gain);
+
+    /* Currently we can set absolute volume for source only in A2DP source profile */
+    if (pa_bluetooth_profile_is_a2dp_source(t->profile))
+        bluez5_transport_set_volume(t, gain);
 }
 
 static void request_volume_reply(DBusPendingCall *pending, void *userdata) {
