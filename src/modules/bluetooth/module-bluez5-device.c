@@ -2476,7 +2476,6 @@ static pa_hook_result_t transport_rx_volume_gain_changed_cb(pa_bluetooth_discove
         return PA_HOOK_OK;
 
     gain = t->rx_volume_gain;
-
     volume = (pa_volume_t)((gain * PA_VOLUME_NORM + t->max_rx_volume_gain / 2) / t->max_rx_volume_gain);
 
     if (volume > PA_VOLUME_NORM)
